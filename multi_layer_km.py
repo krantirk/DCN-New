@@ -22,7 +22,7 @@ from sklearn.preprocessing import normalize
 from cluster_acc import acc
 from sklearn import metrics
 from sklearn.cluster import KMeans
-from DeepLearningTutorials.code.dA import dA
+from Theano_example_code.dA import dA
 from sklearn.preprocessing import scale, normalize
 
 floatX = theano.config.floatX
@@ -189,6 +189,7 @@ class dA2(dA):
 
         L = T.sum(T.pow(self.x - z, 2))
 #        cost = L
+
         cost = 0.5 * 1/self.x.shape[0] * L
         # compute the gradients of the cost of the `dA` with respect
         # to its parameters
@@ -211,7 +212,7 @@ class dA2(dA):
 #                            (1+mu) * 2 * learning_rate * gparam))
             updates.append((bias, bias + delta))
 
-        return (cost, updates)
+        return (L, T.pow(self.x - z, 2), self.x.shape[0], cost, updates)
 
 
 class dA_linear_hidden(dA2):
@@ -423,8 +424,7 @@ class SdC(object):
         pretrain_fns = []
         for dA_ins in self.dA_layers:
             # get the cost and the updates list
-            cost, updates = dA_ins.get_cost_updates(corruption_level,
-                                                    learning_rate, mu)
+            Lx, Tx, Xx, cost, updates = dA_ins.get_cost_updates(corruption_level, learning_rate, mu)
             # compile the theano function
             fn = theano.function(
                 inputs=[
@@ -433,7 +433,7 @@ class SdC(object):
                     theano.In(learning_rate),
                     theano.In(mu)
                 ],
-                outputs=cost,
+                outputs=[Lx, Tx, Xx, cost],
                 updates=updates,
                 givens={
                     self.x: train_set_x[batch_begin: batch_end]
@@ -516,7 +516,7 @@ class SdC_KM(SdC):
         # Add the network reconstruction error
         z = self.get_network_reconst()
         reconst_err = T.sum(T.pow(self.x - z, 2), axis=1)
-        L = self.beta*L + self.lbd*reconst_err
+        L = self.beta*L + self.lbd*reconst_err                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 
         cost1 = T.mean(L)
 #        for W in self.W:
@@ -926,6 +926,7 @@ def test_SdC(Init='', lbd=.01, output_dir='MNIST_results', save_file = '',
     #########################
     # PRETRAINING THE MODEL #
     #########################
+
     if pretraining_epochs == 0 or Init != '':
         print '... skipping pretraining'
     else:
@@ -957,10 +958,11 @@ def test_SdC(Init='', lbd=.01, output_dir='MNIST_results', save_file = '',
                     else:
                         mu_shared.set_value(numpy.float32(mu))
                     pretrain_lr_shared.set_value(numpy.float32(pretrain_lr))
-                    cost = pretraining_fns[i](index=batch_index,
+                    Lx, Tx, Xx, cost = pretraining_fns[i](index=batch_index,
                                               corruption=corruption_levels[i],
                                               lr=pretrain_lr_shared.get_value(),
                                               mu=mu_shared.get_value())
+                    print(cost, Lx, Tx, Xx)
                     c.append(cost)
 
                 print 'Pre-training layer %i, epoch %d, cost ' % (i, epoch),
@@ -1101,6 +1103,8 @@ def test_SdC(Init='', lbd=.01, output_dir='MNIST_results', save_file = '',
             c.append(cost[0])
             d.append(cost[1])
             e.append(cost[2])
+            if minibatch_index % 10 == 0:
+              print(cost[0], cost[1], cost[2])
 #            f.append(cost[3])
 #            g.append(cost[4])
 
